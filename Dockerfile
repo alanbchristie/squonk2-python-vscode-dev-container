@@ -1,6 +1,10 @@
 ARG DEV_PYTHON=3.13.5
 FROM python:${DEV_PYTHON}
 
+ARG KUBECTL_VERSION=1.35.0
+ARG POPEYE_VERSION=0.22.1
+ARG UV_VERSION=0.10.4
+
 # The target platform.
 # Some tool installations (like kubectl) need to know whether we're AMD or ARM
 # The value will be the platform value used in the build ("linux/amd64" or "linux/arm64")
@@ -39,14 +43,12 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && echo "$SNIPPET" >> "/home/$USERNAME/.bashrc"
 
 # Install our python requirements, and kubectl
-ARG KUBECTL_VERSION=1.31.11
 COPY requirements.txt /tmp
 RUN pip install -r /tmp/requirements.txt \
     && curl -LO https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/${TARGETPLATFORM}/kubectl \
     && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl \
     && rm kubectl
 # Popeye (ARM or AMD)
-ARG POPEYE_VERSION=0.22.1
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
         wget https://github.com/derailed/popeye/releases/download/v${POPEYE_VERSION}/popeye_linux_arm64.tar.gz && \
         tar -xf popeye_linux_arm64.tar.gz; \
@@ -58,5 +60,17 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
     fi \
     && mv popeye /usr/local/bin \
     && rm LICENSE README.md
+# uv
+ADD https://astral.sh/uv/${UV_VERSION}/install.sh /uv-installer.sh
+RUN apt-get update \
+    && apt-get install -y \
+        vim \
+    && sh /uv-installer.sh \
+    && rm /uv-installer.sh \
+    && mv /root/.local/bin/uv /usr/local/bin \
+    && mv /root/.local/bin/uvx /usr/local/bin \
+    && chown -R $USERNAME /usr/local/bin/uv \
+    && chown -R $USERNAME /usr/local/bin/uvx
+ENV UV_LINK_MODE=copy
 
 USER $USERNAME
